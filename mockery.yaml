@@ -1,0 +1,6 @@
+packages:
+  all: true
+
+output: ./mock
+outpkg: mock
+keeptree: true
