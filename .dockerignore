@@ -1,0 +1,32 @@
+# Go build cache
+**/*.test
+*.out
+
+# Binary output
+bin/
+log-receiver
+log-receiver.exe
+
+# Vendor dir (if not vendoring)
+vendor/
+
+# Git and editor stuff
+.git/
+.gitignore
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Coverage and test results
+coverage.*
+*.cov
+*.coverprofile
+
+# Docker-related
+Dockerfile
+docker-compose.yml
