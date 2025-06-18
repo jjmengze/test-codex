@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"log-receiver/pkg/logger"
 	"log-receiver/pkg/logger/slog"
 
 	"log-receiver/internal/usecase"
@@ -25,11 +26,11 @@ func (m *mockValidator) Validate(ctx context.Context, productCode string) (bool,
 	return m.shouldPass, m.err
 }
 
-func mockTokenDecryptorFail(tokenString string, pubKey *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
+func mockTokenDecryptorFail(ctx context.Context, logger logger.Logger, tokenString string, pubKey *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
 	return nil, errors.New("invalid token")
 }
 
-func mockTokenDecryptorSuccess(tokenString string, pubKey *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
+func mockTokenDecryptorSuccess(ctx context.Context, logger logger.Logger, tokenString string, pubKey *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
 	return &auth.IDPTokenPayload{ProducerProductID: "product-123"}, nil
 }
 
@@ -45,7 +46,7 @@ func TestValidateIDPToken(t *testing.T) {
 		name               string
 		authHeader         string
 		productCode        string
-		mockDecryptor      func(string, *rsa.PublicKey) (*auth.IDPTokenPayload, error)
+		mockDecryptor      func(ctx context.Context, logger logger.Logger, tokenString string, rsaPublicKey *rsa.PublicKey) (*auth.IDPTokenPayload, error)
 		validator          usecase.Validator
 		expectedStatusCode int
 		expectedErr        string
@@ -81,7 +82,7 @@ func TestValidateIDPToken(t *testing.T) {
 			name:        "product ID mismatch",
 			authHeader:  "Bearer validtoken",
 			productCode: "mismatch",
-			mockDecryptor: func(token string, pubKey *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
+			mockDecryptor: func(ctx context.Context, logger logger.Logger, token string, pubKey *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
 				return &auth.IDPTokenPayload{ProducerProductID: "product-123"}, nil
 			},
 			validator:          &mockValidator{shouldPass: true},

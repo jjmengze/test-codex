@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/rsa"
 	"errors"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	usecaseMock "log-receiver/mock/internal_/usecase"
 	"log-receiver/pkg/auth"
+	"log-receiver/pkg/logger"
 	"log-receiver/pkg/logger/slog"
 )
 
@@ -65,7 +67,7 @@ func TestValidateIDPTokenHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// mock decrypt function
-			decryptIDPJWTToken = func(token string, key *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
+			decryptIDPJWTToken = func(ctx context.Context, logger logger.Logger, token string, key *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
 				if tt.tokenPayload == nil {
 					return nil, errors.New("fail")
 				}

@@ -13,6 +13,7 @@ import (
 	"log-receiver/internal/usecase"
 	"log-receiver/pkg/auth"
 	"log-receiver/pkg/aws"
+	"log-receiver/pkg/logger"
 )
 
 const CtxKeyIDPTokenPayload = "idpPayload"
@@ -22,11 +23,11 @@ func getJWTToken(token string) string {
 }
 
 // ValidateTokenController is a middleware that validates JWT token and product code.
-func ValidateTokenController(validator usecase.Validator, pubKeyAbsPath string, isTestPem bool) gin.HandlerFunc {
+func ValidateTokenController(l logger.Logger, validator usecase.Validator, pubKeyAbsPath string, isTestPem bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var publicKey *rsa.PublicKey
 		var err error
-		if isTestPem {
+		if !isTestPem {
 			pubKeyAbsPath = ""
 			productCode := c.Param("productCode")
 			publicKey, err = aws.GetVerifyKeyByProductCode(productCode)
@@ -36,7 +37,7 @@ func ValidateTokenController(validator usecase.Validator, pubKeyAbsPath string, 
 				return
 			}
 		}
-		payload, code, err := validateIDPToken(c, pubKeyAbsPath, publicKey, validator)
+		payload, code, err := validateIDPToken(l, c, pubKeyAbsPath, publicKey, validator)
 		if err != nil {
 			c.AbortWithStatusJSON(code, gin.H{"error": err.Error()})
 			return
@@ -48,7 +49,7 @@ func ValidateTokenController(validator usecase.Validator, pubKeyAbsPath string, 
 
 // validateIDPToken validates JWT token and productCode.
 // It returns the token payload or an HTTP status code and error when validation fails.
-func validateIDPToken(c *gin.Context, pubKeyAbsPath string, publicKey *rsa.PublicKey, validator usecase.Validator) (*auth.IDPTokenPayload, int, error) {
+func validateIDPToken(logger logger.Logger, c *gin.Context, pubKeyAbsPath string, publicKey *rsa.PublicKey, validator usecase.Validator) (*auth.IDPTokenPayload, int, error) {
 	ctx := c.Request.Context()
 
 	authHeader := c.GetHeader("Authorization")
@@ -62,16 +63,18 @@ func validateIDPToken(c *gin.Context, pubKeyAbsPath string, publicKey *rsa.Publi
 	if pubKeyAbsPath != "" && publicKey == nil {
 		pubKeyBytes, err := os.ReadFile(pubKeyAbsPath)
 		if err != nil {
+			logger.WithContext(ctx).ErrorF("failed to read public key: %s, err %w", pubKeyAbsPath, err)
 			return nil, http.StatusInternalServerError, err
 		}
 
 		publicKey, err = jwt.ParseRSAPublicKeyFromPEM(pubKeyBytes)
 		if err != nil {
+			logger.WithContext(ctx).ErrorF("failed to parse public key: %s, err %w", pubKeyBytes, err)
 			return nil, http.StatusInternalServerError, err
 		}
 	}
 
-	payload, err := auth.DecryptIDPJWTToken(tokenString, publicKey)
+	payload, err := auth.DecryptIDPJWTToken(c.Request.Context(), logger, tokenString, publicKey)
 	if err != nil {
 		return nil, http.StatusUnauthorized, err
 	}

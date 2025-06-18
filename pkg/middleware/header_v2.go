@@ -16,5 +16,6 @@ func AssignV2Header() gin.HandlerFunc {
 		logType := parts[len(parts)-1]
 		c.Set("logType", logType)
 		c.Set("subType", c.Param("subType"))
+		c.Next()
 	}
 }

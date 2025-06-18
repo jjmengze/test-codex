@@ -8,8 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TODO Implement this middleware to validate and extract the request body
-// This function should:
 // 1. Read the request body
 // 2. Check the data is less then 30 MB, otherwise return an corresponding error code.
 const maxSize = 30 << 20 // 30 MB

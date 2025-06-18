@@ -78,7 +78,7 @@ func validateIDPToken(logger logger.Logger, c *gin.Context, validator usecase.Va
 		}
 	}
 
-	payload, err := decryptIDPJWTToken(tokenString, pubKey)
+	payload, err := decryptIDPJWTToken(c.Request.Context(), logger, tokenString, pubKey)
 	if err != nil {
 		logger.WithContext(ctx).ErrorF("failed to decrypt token: %s", tokenString)
 		return nil, http.StatusUnauthorized, err

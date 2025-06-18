@@ -29,7 +29,7 @@ func NewReceiverService(logger logger.Logger, route gin.IRouter, usecaseReceiver
 }
 
 func (h receiverService) handleRoute(route gin.IRouter, isTestPem bool) {
-	r := route.Group("/", middleware.LoggerMiddleware(h.logger), middleware.ValidateTokenController(h.usecaseValidator, pubKeyAbsPath, isTestPem), middleware.AssignV2Header(), middleware.CheckHeader(h.logger), middleware.CheckRequestBody())
+	r := route.Group("/", middleware.LoggerMiddleware(h.logger), middleware.ValidateTokenController(h.logger, h.usecaseValidator, pubKeyAbsPath, isTestPem), middleware.AssignV2Header(), middleware.CheckHeader(h.logger), middleware.CheckRequestBody())
 	{
 		// TODO: implement the HTTP handler for POST method
 		// New employees should add the POST handler here

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rsa"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	jwt "github.com/golang-jwt/jwt"
+	"log-receiver/pkg/logger"
 )
 
 const (
@@ -74,10 +76,10 @@ func GenIDPJWTToken(ppid, cpid, cid, uid string, et int64) string {
 	return tokenString
 }
 
-func DecryptJwtToken(tokenString string, rsaPublicKey *rsa.PublicKey) (*TokenPayload, error) {
+func DecryptJwtToken(ctx context.Context, logger logger.Logger, tokenString string, rsaPublicKey *rsa.PublicKey) (*TokenPayload, error) {
 	payload := &TokenPayload{}
 
-	token, err := validateToken(tokenString, rsaPublicKey)
+	token, err := validateToken(ctx, logger, tokenString, rsaPublicKey)
 	if err != nil {
 		return payload, err
 	}
@@ -96,10 +98,10 @@ func DecryptJwtToken(tokenString string, rsaPublicKey *rsa.PublicKey) (*TokenPay
 	return payload, err
 }
 
-func DecryptIDPJWTToken(tokenString string, rsaPublicKey *rsa.PublicKey) (*IDPTokenPayload, error) {
+func DecryptIDPJWTToken(ctx context.Context, logger logger.Logger, tokenString string, rsaPublicKey *rsa.PublicKey) (*IDPTokenPayload, error) {
 	payload := &IDPTokenPayload{}
 
-	token, err := validateToken(tokenString, rsaPublicKey)
+	token, err := validateToken(ctx, logger, tokenString, rsaPublicKey)
 	if err != nil {
 		return payload, err
 	}
@@ -135,24 +137,32 @@ func DecryptIDPJWTToken(tokenString string, rsaPublicKey *rsa.PublicKey) (*IDPTo
 	return payload, err
 }
 
-func validateToken(tokenString string, rsaPublicKey *rsa.PublicKey) (*jwt.Token, error) {
+func validateToken(ctx context.Context, logger logger.Logger, tokenString string, rsaPublicKey *rsa.PublicKey) (*jwt.Token, error) {
 	// validate the token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Don't forget to validate the alg is what you expect:
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			err := fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			logger.WithContext(ctx).ErrorF("Failed to validate token: %v", err)
+			return nil, err
 		}
 
 		return rsaPublicKey, nil
 	})
+	if err != nil {
+		logger.WithContext(ctx).ErrorF("Failed to validate token: %v", err)
+		return nil, err
+	}
 
 	// error handling
 	if ve, ok := err.(*jwt.ValidationError); ok {
 		if ve.Errors&jwt.ValidationErrorMalformed != 0 {
-			log.Fatalf("Invalid JWT Token: %v", err)
+			logger.WithContext(ctx).ErrorF("Token is malformed, err: %v", err)
+			return nil, err
 		} else if ve.Errors&(jwt.ValidationErrorExpired|jwt.ValidationErrorNotValidYet) != 0 {
 			// Token is either expired or not active yet
-			log.Fatalf("Expired JWT Token: %v", err)
+			logger.WithContext(ctx).ErrorF("Token is expired, err: %v", err)
+			return nil, err
 		}
 	}
 

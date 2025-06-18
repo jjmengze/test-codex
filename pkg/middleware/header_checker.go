@@ -19,12 +19,14 @@ func CheckHeader(logger logger.Logger) gin.HandlerFunc {
 			err := fmt.Errorf("missing key in context: %s", CtxKeyIDPTokenPayload)
 			logger.WarnF("error getting key  %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 		idPTokenPayload, ok := val.(*auth.IDPTokenPayload)
 		if !ok {
 			err := fmt.Errorf("invalid payload type: %T", val)
 			logger.ErrorF("error getting payload %v", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 
 		c.Set("customerID", idPTokenPayload.CustomerID)

@@ -20,6 +20,8 @@ import (
 	logger "log-receiver/pkg/logger"
 	slogger "log-receiver/pkg/logger/slog"
 
+	awsSDK "github.com/aws/aws-sdk-go/aws"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"golang.org/x/net/http2"
@@ -27,7 +29,7 @@ import (
 )
 
 var port = flag.Int("port", 8080, "port to listen on, default 8080")
-var isTestPem = flag.Bool("is_test_pem", false, "path to pem file for testing")
+var isTestPem = flag.Bool("is_test_pem", false, "is used mock pem to verify jwt token")
 
 func init() {
 	err := godotenv.Load(".env")
@@ -44,7 +46,13 @@ func main() {
 	logger := slogger.GetGlobalLogger()
 
 	//inject config(e.g. aws service )
-	kinesisClient, err := kinesis.NewClient(ctx, logger, aws.NewKinesisClient())
+	awsCfg := awsSDK.NewConfig().WithRegion("us-west-2")
+	awsSession, err := aws.NewSession(awsCfg)
+	ssmClient := aws.NewSsmClient(awsSession)
+	//TODO: This is not a best practice because it introduces a global variable and it's hard to guarantee this function is called only once, even with sync.Once.
+	aws.InitPublicKeyMap(ssmClient)
+
+	kinesisClient, err := kinesis.NewClient(ctx, logger, aws.NewKinesisClient(awsSession))
 	if err != nil {
 		logger.WithContext(ctx).FatalF("create kinesis client error: %v", err)
 		return
