@@ -1,106 +1,88 @@
 package handler
 
 import (
-	"context"
-	"crypto/rsa"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	usecaseMock "log-receiver/mock/internal_/usecase"
+
+	mockusecase "log-receiver/mock/internal_/usecase"
 	"log-receiver/pkg/auth"
-	"log-receiver/pkg/logger"
 	"log-receiver/pkg/logger/slog"
+	"log-receiver/pkg/middleware"
 )
 
-func TestValidateIDPTokenHandler(t *testing.T) {
+func TestValidateToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// prepare environment for reading public key
-	os.Setenv("JWT_PUBLIC_KEY_PATH", "../../config/dummy_public_key.pem")
-
 	tests := []struct {
-		name         string
-		header       string
-		tokenPayload *auth.IDPTokenPayload
+		name     string
+		param    string
+		ctxValue interface{}
+		// 下面兩個欄位給 mock 回傳用
 		validatorOK  bool
 		validatorErr error
-		expectedCode int
-		expectedErr  bool
+
+		wantStatus     int
+		wantBodySubstr string
 	}{
 		{
-			name:         "missing authorization header",
-			header:       "",
-			expectedCode: http.StatusUnauthorized,
-			expectedErr:  true,
+			name:           "Missing payload",
+			param:          "prod",
+			ctxValue:       nil,
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "missing ID P Token Payload",
 		},
 		{
-			name:         "token product code mismatch",
-			header:       "Bearer dummy",
-			tokenPayload: &auth.IDPTokenPayload{ProducerProductID: "foo"},
-			validatorOK:  true,
-			expectedCode: http.StatusUnauthorized,
-			expectedErr:  true,
+			name:           "Invalid type",
+			param:          "prod",
+			ctxValue:       "not a payload",
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "can't convert to IDP Token Payload",
 		},
 		{
-			name:         "unsupported product",
-			header:       "Bearer dummy",
-			tokenPayload: &auth.IDPTokenPayload{ProducerProductID: "sao"},
-			validatorOK:  false,
-			expectedCode: http.StatusNotAcceptable,
-			expectedErr:  true,
-		},
-		{
-			name:         "valid token",
-			header:       "Bearer dummy",
-			tokenPayload: &auth.IDPTokenPayload{ProducerProductID: "sao"},
-			validatorOK:  true,
-			expectedCode: http.StatusOK,
+			name:           "Success",
+			param:          "prod",
+			ctxValue:       &auth.IDPTokenPayload{ProducerProductID: "prod"},
+			validatorOK:    true,
+			validatorErr:   nil,
+			wantStatus:     http.StatusOK,
+			wantBodySubstr: `{"payload":{"cpid":"","ppid":"prod","cid":"","uid":"","pl":"","it":0,"et":0}}`,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// mock decrypt function
-			decryptIDPJWTToken = func(ctx context.Context, logger logger.Logger, token string, key *rsa.PublicKey) (*auth.IDPTokenPayload, error) {
-				if tt.tokenPayload == nil {
-					return nil, errors.New("fail")
-				}
-				return tt.tokenPayload, nil
-			}
-			defer func() { decryptIDPJWTToken = auth.DecryptIDPJWTToken }()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// 準備 HTTP recorder 與 Gin context
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("POST", fmt.Sprintf("/validate_token/%s", tc.param), nil)
 
-			// mock validator
-			mVal := usecaseMock.NewValidator(t)
-			productCode := "sao"
-			if tt.header != "" && tt.tokenPayload.ProducerProductID == productCode {
-				mVal.On("Validate", mock.Anything, tt.tokenPayload.ProducerProductID).Return(tt.validatorOK, tt.validatorErr)
+			// 將 payload 放到 context
+			if tc.ctxValue != nil {
+				c.Set(middleware.CtxKeyIDPTokenPayload, tc.ctxValue)
 			}
+			c.Params = gin.Params{{Key: "productCode", Value: tc.param}}
 
-			rec := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(rec)
-			c.Request = httptest.NewRequest(http.MethodGet, "/activity_log/"+productCode, nil)
-			c.Params = gin.Params{{Key: "productCode", Value: productCode}}
-			if tt.header != "" {
-				c.Request.Header.Set("Authorization", tt.header)
+			// 用 Mockey 生成的 mock
+			validatorMock := mockusecase.NewValidator(t)
+
+			svc := validateService{
+				logger:           slog.GetGlobalLogger(),
+				usecaseValidator: validatorMock,
+				isTestPem:        true,
 			}
 
-			payload, code, err := validateIDPToken(slog.GetGlobalLogger(), c, mVal, true)
+			// 執行 handler
+			svc.validateToken(c)
 
-			if tt.expectedErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-			assert.Equal(t, tt.expectedCode, code)
-			if code == http.StatusOK {
-				assert.Equal(t, tt.tokenPayload, payload)
-			}
+			// 驗證 HTTP status & body
+			assert.Equal(t, tc.wantStatus, w.Code, "status code")
+			assert.Contains(t, w.Body.String(), tc.wantBodySubstr, "body substring")
+
 		})
 	}
 }

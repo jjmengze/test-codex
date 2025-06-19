@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+
 	"log-receiver/internal/usecase"
 	"log-receiver/pkg/logger/slog"
 )
@@ -21,7 +22,7 @@ func TestHealthEndpoint(t *testing.T) {
 	var mockValidator usecase.Validator
 
 	// Init handler with route
-	NewHttpHandler(mockLogger, r, mockReceiver, mockValidator, true)
+	NewHttpHandler(mockLogger, r, mockReceiver, mockValidator, "test/pem", true)
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)

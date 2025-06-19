@@ -5,10 +5,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -28,15 +29,36 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
+var pubKeyAbsPath = os.Getenv("JWT_PUBLIC_KEY_PATH")
 var port = flag.Int("port", 8080, "port to listen on, default 8080")
 var isTestPem = flag.Bool("is_test_pem", false, "is used mock pem to verify jwt token")
 
 func init() {
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Println("No .env file found")
+		slogger.GetGlobalLogger().WarnF("No .env file found")
 	}
 	flag.Parse()
+	if *isTestPem {
+		if pubKeyAbsPath == "" {
+			_, currentFile, _, ok := runtime.Caller(0)
+			if !ok {
+				slogger.GetGlobalLogger().FatalF("Cannot get runtime caller info for public key")
+			}
+			baseDir := filepath.Dir(currentFile)
+			projectRoot := filepath.Join(baseDir, "..", "..")
+			pubKeyAbsPath = filepath.Join(projectRoot, "config", "dummy_public_key.pem")
+		}
+		absPath, err := filepath.Abs(pubKeyAbsPath)
+		if err != nil {
+			slogger.GetGlobalLogger().FatalF("Failed to resolve absolute path: %v", err)
+		}
+		pubKeyAbsPath = absPath
+
+		if _, err := os.Stat(pubKeyAbsPath); os.IsNotExist(err) {
+			slogger.GetGlobalLogger().FatalF("Private key file does not exist at %s", pubKeyAbsPath)
+		}
+	}
 }
 
 func main() {
@@ -67,7 +89,7 @@ func main() {
 	usecaseReceiver := usecase.NewReceiver(logger, repoPublisher)
 	usecaseValidator := usecase.NewValidator(logger)
 	//inject handler
-	_ = handler.NewHttpHandler(logger, engine, usecaseReceiver, usecaseValidator, *isTestPem)
+	_ = handler.NewHttpHandler(logger, engine, usecaseReceiver, usecaseValidator, pubKeyAbsPath, *isTestPem)
 
 	startWithGracefulShutdown(logger, engine, 1*time.Minute)
 

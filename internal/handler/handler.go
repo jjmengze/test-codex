@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"log-receiver/internal/usecase"
 	"log-receiver/pkg/logger"
 	"log-receiver/pkg/middleware"
@@ -14,7 +15,7 @@ type httpHandler struct {
 	app    *gin.Engine
 }
 
-func NewHttpHandler(logger logger.Logger, app *gin.Engine, receiver usecase.Receiver, validator usecase.Validator, isTestPem bool) *httpHandler {
+func NewHttpHandler(logger logger.Logger, app *gin.Engine, receiver usecase.Receiver, validator usecase.Validator, pubKeyAbsPath string, isTestPem bool) *httpHandler {
 	h := &httpHandler{
 		logger: logger,
 		app:    app,
@@ -28,7 +29,7 @@ func NewHttpHandler(logger logger.Logger, app *gin.Engine, receiver usecase.Rece
 	api.Use(middleware.AssignTraceID())
 	v2 := api.Group("/v2")
 
-	NewReceiverService(logger, v2, receiver, validator, isTestPem)
-	NewValidateService(logger, v2, validator, isTestPem)
+	NewReceiverService(logger, v2, receiver, validator, pubKeyAbsPath, isTestPem)
+	NewValidateService(logger, v2, validator, pubKeyAbsPath, isTestPem)
 	return h
 }

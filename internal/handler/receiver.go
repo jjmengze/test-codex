@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"log-receiver/internal/domain/entity"
 	"log-receiver/internal/usecase"
 	"log-receiver/pkg/logger"
@@ -18,17 +19,17 @@ type receiverService struct {
 	usecaseValidator usecase.Validator
 }
 
-func NewReceiverService(logger logger.Logger, route gin.IRouter, usecaseReceiver usecase.Receiver, validator usecase.Validator, isTestPem bool) {
+func NewReceiverService(logger logger.Logger, route gin.IRouter, usecaseReceiver usecase.Receiver, validator usecase.Validator, pubKeyAbsPath string, isTestPem bool) {
 	handler := receiverService{
 		logger:           logger,
 		usecaseReceiver:  usecaseReceiver,
 		usecaseValidator: validator,
 	}
-	handler.handleRoute(route, isTestPem)
+	handler.handleRoute(route, pubKeyAbsPath, isTestPem)
 	return
 }
 
-func (h receiverService) handleRoute(route gin.IRouter, isTestPem bool) {
+func (h receiverService) handleRoute(route gin.IRouter, pubKeyAbsPath string, isTestPem bool) {
 	r := route.Group("/", middleware.LoggerMiddleware(h.logger), middleware.ValidateTokenController(h.logger, h.usecaseValidator, pubKeyAbsPath, isTestPem), middleware.AssignV2Header(), middleware.CheckHeader(h.logger), middleware.CheckRequestBody())
 	{
 		// TODO: implement the HTTP handler for POST method
